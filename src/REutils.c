@@ -14,17 +14,19 @@ void* memSearch(uint8_t* haystack, size_t hSz, uint8_t* needle, size_t nSz) {
 
 __attribute__((force_align_arg_pointer))
 void* memSearchAVX2(uint8_t* haystack, size_t hSz, uint8_t* needle, size_t nSz) {
-	if(hSz + (uintptr_t)haystack % 0x20 < nSz + 0x20 
-		|| nSz < 2) return memSearch(haystack, hSz, needle, nSz);
+	size_t pad = (0x20 - ((uintptr_t)haystack & 0x1F)) & 0x1F;
+	size_t min = (0x40 < nSz + 0x1F ? 0x1F + nSz : 0x40);
+	if(hSz < pad + min || nSz < 2) 
+		return memSearch(haystack, hSz, needle, nSz);
 
-	hSz -= (0x20 - ((uintptr_t)haystack & 0x1F)) & 0x1F;
+	hSz -= pad;
 	for(; (uintptr_t)haystack % 0x20 != 0; haystack++) {
 		if(0 == memcmp(haystack, needle, nSz)) return haystack;
 	}
 
 	uint8_t lastByte = needle[nSz - 1];
 	size_t i = 0;
-	size_t check = hSz - (0x40 < nSz + 0x1F ? 0x1F + nSz : 0x40);
+	size_t check = hSz - min;
 	__m256i b1 = _mm256_set1_epi8(needle[0]);
 	__m256i b2 = _mm256_set1_epi8(needle[1]);
 	__m256i vec1 = _mm256_load_si256((__m256i const*)haystack);
@@ -50,9 +52,8 @@ void* memSearchAVX2(uint8_t* haystack, size_t hSz, uint8_t* needle, size_t nSz) 
 		vec1 = vec2;
 	}
 
-	for(; i <= hSz - nSz; i++) {
+	for(; i <= hSz - nSz; i++)
 		if(0 == memcmp(haystack + i, needle, nSz)) return haystack + i;
-	}
 
 	return NULL;
 } 
